@@ -1,0 +1,42 @@
+# ---- target ----------------------------------------------------------------
+CONFIG_IDF_TARGET="esp32p4"
+
+# ---- CPU / PSRAM -----------------------------------------------------------
+# The P4 module on the Waveshare board has HEX (16-bit) PSRAM. If the board
+# reports a PSRAM init failure, try QUAD mode / a lower speed in menuconfig.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_360=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_HEX=y
+CONFIG_SPIRAM_SPEED_200M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
+# ---- flash -----------------------------------------------------------------
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ---- camera ----------------------------------------------------------------
+# OV5647 is the sensor on the Raspberry Pi camera module.
+CONFIG_CAMERA_OV5647=y
+CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE=y
+CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE=y
+
+# ---- tasks / stacks --------------------------------------------------------
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+
+# ---- networking throughput -------------------------------------------------
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=65535
+CONFIG_LWIP_TCP_WND_DEFAULT=65535
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=64
+CONFIG_LWIP_UDP_RECVMBOX_SIZE=64
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=64
+CONFIG_LWIP_TCP_MSS=1440
+CONFIG_LWIP_TCP_MAXRTX=6
+CONFIG_LWIP_SO_LINGER=y
+
+# ---- log -------------------------------------------------------------------
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y

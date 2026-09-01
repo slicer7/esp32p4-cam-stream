@@ -1,0 +1,19 @@
+# ESP-IDF build output
+build/
+sdkconfig
+sdkconfig.old
+
+# Managed components are fetched by the component manager on each machine.
+# sdkconfig.defaults IS tracked - it is the shared configuration.
+managed_components/
+dependencies.lock
+
+# VS Code ESP-IDF settings hold absolute toolchain paths that differ per
+# machine. Let the extension regenerate them with "Use Existing Setup".
+.vscode/
+
+# Editor / OS noise
+*.swp
+*~
+.DS_Store
+Thumbs.db

@@ -1,0 +1,11 @@
+dependencies:
+  idf: ">=5.4"
+
+  # V4L2-style camera stack for ESP32-P4 (MIPI-CSI + ISP).
+  # Pulls in espressif/esp_cam_sensor, which contains the OV5647 driver.
+  espressif/esp_video: "*"
+
+  # Wi-Fi on the ESP32-P4 is provided by the on-board ESP32-C6 over SDIO.
+  # esp_wifi_remote gives you the normal esp_wifi_* API; esp_hosted is the transport.
+  espressif/esp_wifi_remote: "*"
+  espressif/esp_hosted: "*"
