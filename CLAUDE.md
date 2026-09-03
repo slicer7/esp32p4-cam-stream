@@ -231,6 +231,24 @@ newer API. Related: esp-dl 3.1.x has no `set_score_thr()` and no
 `DL_IMAGE_PIX_TYPE_RGB565LE` (just `..._RGB565`), so the score threshold is
 applied by filtering results in `detector_task`.
 
+**After ANY change to the esp-dl version, delete `build/espdl_models/`.**
+coco_detect packs the model at build time with `pack_espdl_models.py` *from the
+esp-dl component*, and the custom command's only dependency is the source
+`.espdl` files — which do not change when esp-dl does. So the packed container
+goes stale: esp-dl 3.3.x writes a `PDL3` header, 3.1.5's loader only accepts
+`EDL1`/`PDL1`/`EDL2`/`PDL2`, and you get
+
+```
+E FbsLoader: Unsupported format, or the model file is corrupted!
+E dl::Model: Fail to load model
+Guru Meditation Error: Core 0 panic'ed (Load access fault)
+```
+
+The panic is a secondary effect — esp-dl calls `minimize()` on the null model
+instead of bailing out, so the backtrace points at `fbs_model.cpp` and hides the
+real cause. Check the magic bytes of `build/espdl_models/coco_detect.espdl`
+before believing anything else; it should be `EDL2` with one model selected.
+
 Only the 320x320 model is flashed. Each model variant costs ~2.9 MB, and the
 640x640 ones are several times slower for little gain at streaming rates. The
 app partition was grown from 4 MB to 8 MB to fit it — **the partition table
