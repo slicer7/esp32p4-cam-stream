@@ -78,11 +78,22 @@ Extension 2.2.0 does **not** use `idf.espIdfPath` / `idf.toolsPath` /
 must be of type string." With `idf.customExtraVars` empty it silently defaults
 `IDF_PATH` to `%USERPROFILE%\esp\esp-idf`, which does not exist here.
 
-`.vscode/settings.json` is gitignored (absolute paths). Recreate it per machine
-with `idf.currentSetup`, and `idf.customExtraVars` carrying at least `IDF_PATH`,
-`IDF_TOOLS_PATH`, `IDF_PYTHON_ENV_PATH` and `ESP_IDF_VERSION`. The extension's
-"Use Existing Setup" wizard is supposed to write these but failed partway here,
-leaving only `idf.gitPathWin`.
+`idf.customExtraVars` must also carry a **`PATH`** key listing every tool
+directory. The extension validates the toolchain by looking for each required
+tool on *that* PATH, not the system one; without it you get "ESP-IDF Setup from
+environment variables is not valid: Missing required tools: xtensa-esp-elf-gdb,
+riscv32-esp-elf-gdb, ..." even though every tool is installed and working.
+
+**The extension rewrites this file and has been observed silently dropping
+`IDF_PATH`, `IDF_TOOLS_PATH` and `IDF_PYTHON_ENV_PATH` from `customExtraVars`.**
+If ESP-IDF commands start failing after they previously worked, re-read
+`.vscode/settings.json` before assuming anything else changed.
+
+`.vscode/settings.json` is gitignored (absolute paths). `docs/vscode-settings.example.json`
+is a working copy from the desktop machine — copy it and adjust the versions in
+the paths to match what EIM installed on the other machine. The extension's
+"Use Existing Setup" wizard is supposed to generate all of this but failed
+partway here, leaving only `idf.gitPathWin`.
 
 ### VS Code setup (this bit already went wrong once)
 
