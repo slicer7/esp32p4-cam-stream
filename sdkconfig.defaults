@@ -1,6 +1,14 @@
 # ---- target ----------------------------------------------------------------
 CONFIG_IDF_TARGET="esp32p4"
 
+# ---- chip revision --------------------------------------------------------
+# This board's ESP32-P4 is revision v1.3. IDF defaults to requiring rev v3.1 and
+# the firmware refuses to boot on an older chip, so select the <3.0 family and
+# a v1.0 minimum. Note this also removes the 250 MHz PSRAM option (200 MHz,
+# configured below, is still available).
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_100=y
+
 # ---- CPU / PSRAM -----------------------------------------------------------
 # The P4 module on the Waveshare board has HEX (16-bit) PSRAM. If the board
 # reports a PSRAM init failure, try QUAD mode / a lower speed in menuconfig.

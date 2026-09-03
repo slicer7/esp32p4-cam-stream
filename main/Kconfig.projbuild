@@ -36,15 +36,35 @@ menu "P4 Camera Stream Configuration"
 
     config P4CAM_FRAME_WIDTH
         int "Capture width"
-        default 800
+        default 1280
 
     config P4CAM_FRAME_HEIGHT
         int "Capture height"
-        default 640
+        default 960
         help
             Must match one of the OV5647 modes compiled into esp_cam_sensor.
             The firmware logs every supported size at boot; if the requested
             size is rejected it falls back to the sensor default.
+
+            FIELD OF VIEW: only 1280x960 gives the lens's full FOV. The OV5647
+            modes differ in how much of the 2624x1954 array they read out, and
+            every mode except 1280x960 crops it:
+
+              1280x960   x 24..2600, y 12..1944   98% of the array, 2x2
+                         binned. FULL FOV. RAW10, 45 fps. This is the default.
+              800x640    x 500..2623, y 0..1953   81% of the width; loses
+                         about a fifth of the horizontal FOV.
+              1920x1080  x 348..2275, y 434..1521 73% wide, 56% tall. The
+                         classic 1080p centre crop, and by far the narrowest
+                         view despite being the highest resolution.
+
+            A wider view therefore comes from picking the binned mode, not from
+            picking more pixels.
+
+            1280x960 costs more memory than 800x640: 2.4 MB per RGB565 frame
+            buffer, two of them, plus a 1.2 MB JPEG output buffer. Expect a
+            lower frame rate too - each frame is 2.4x the pixels to encode and
+            push over Wi-Fi.
 
     config P4CAM_JPEG_QUALITY
         int "JPEG quality (1-100)"

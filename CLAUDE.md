@@ -26,18 +26,24 @@ push it into the ISP or the encoder instead.
 | Link to camera | MIPI-CSI, 2 lane, RAW8; SCCB on I2C port 0 |
 | Wi-Fi | ESP32-C6 over SDIO via ESP-Hosted; `esp_wifi_remote` forwards the normal `esp_wifi_*` API |
 
-**Builds clean, but has never run on the board.** As of 2026-09-01 the project
-compiles without warnings against ESP-IDF v5.5.5 (app binary ~951 KB, 77% of the
-4 MB partition free) and all managed components resolve: `esp_video` 2.4.1,
-`esp_cam_sensor` 2.4.0, `esp_hosted` 3.0.6, `esp_wifi_remote` 1.6.4. No frame
-has ever been captured. Three things are unconfirmed and are the first suspects
-for any runtime failure:
+**Working on hardware.** As of 2026-09-02 the live stream runs end to end on the
+real board: capture, ISP, hardware JPEG, Wi-Fi, browser. Built against ESP-IDF
+v5.5.5 with `esp_video` 2.4.1, `esp_cam_sensor` 2.4.0, `esp_hosted` 3.0.6,
+`esp_wifi_remote` 1.6.4.
 
-1. **SCCB pins.** Default GPIO7 (SDA) / GPIO8 (SCL) — that is Espressif's
-   reference board. Waveshare's schematic may differ. Configurable in menuconfig.
-2. **CSI vs DSI connector.** The board has two identical-looking 15-pin sockets.
-3. **Camera clock.** OV5647 needs 24 MHz. Pi Camera v1.3 and most clones have
-   their own oscillator; if this one does not, the sensor never answers on I2C.
+That settles what used to be the three open questions: the SCCB pins at GPIO7/8
+are right for this board, the CSI connector is the correct one of the two 15-pin
+sockets, and the camera module self-clocks (no host 24 MHz needed).
+
+**The chip is ESP32-P4 revision v1.3.** IDF defaults to requiring rev v3.1 and
+the firmware then refuses to boot. `sdkconfig.defaults` sets
+`CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` and `CONFIG_ESP32P4_REV_MIN_100=y`
+(minimum v1.0). Do not remove these. A side effect: the 250 MHz PSRAM option
+disappears from menuconfig, because it requires rev >= 3.0. 200 MHz is unaffected
+and is what this project uses.
+
+**The camera is a 120 degree wide-angle OV5647.** See the FOV notes below — the
+sensor mode determines how much of that 120 degrees you actually get.
 
 ## Toolchain — read this before building
 
@@ -160,6 +166,31 @@ HTTP server → `app_main`. Keep that order and that style if you extend it.
 - **RGB565 vs RGB888** is a menuconfig choice, not a constant. RGB888 exists as
   the escape hatch if the ISP and encoder disagree on RGB565 byte order
   (symptom: red and blue swapped).
+- **1280x960 is chosen for field of view, not for resolution.** Do not "optimise"
+  it down to 800x640 for speed, and do not raise it to 1920x1080 assuming bigger
+  is better — see below.
+
+## Field of view — why the capture mode is 1280x960
+
+The lens is 120 degrees, but the OV5647 modes read different parts of the
+2624x1954 array, and all but one crop it. Windows are from the sensor's
+0x3800-0x3807 registers in `managed_components/espressif__esp_cam_sensor/
+sensors/ov5647/private_include/`:
+
+| Mode | Array window | Coverage |
+|---|---|---|
+| **1280x960** | x 24..2600, y 12..1944 | **98%, 2x2 binned — full FOV** |
+| 800x640 | x 500..2623, y 0..1953 | 81% of the width |
+| 1920x1080 | x 348..2275, y 434..1521 | 73% wide, 56% tall — narrowest |
+
+So 1920x1080 has the most pixels and the *worst* field of view; it is the classic
+1080p centre crop. Width comes from the binned mode, not from resolution. The
+cost of 1280x960 is 2.4 MB per RGB565 frame buffer (two of them) plus a 1.2 MB
+JPEG output buffer, and a lower frame rate — 2.4x the pixels of 800x640 to encode
+and push over Wi-Fi.
+
+If someone asks for a wider view than this, the mode list is exhausted; the
+answer is a different lens, not a different setting.
 
 ## Known-fragile
 

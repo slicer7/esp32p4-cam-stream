@@ -46,7 +46,7 @@ Set under **P4 Camera Stream Configuration**:
 |---|---|
 | Wi-Fi SSID / password | 2.4 GHz or 5 GHz, the C6 does both |
 | Camera SCCB SDA / SCL | default 7 / 8 — **verify against the Waveshare schematic** |
-| Capture width / height | default 800×640; boot log lists every size the driver accepts |
+| Capture width / height | default 1280×960 — the only mode with the lens's full field of view (see below) |
 | JPEG quality | 80 is a good starting point |
 | ISP output format | RGB565 (fast) or RGB888 (use if colours look wrong) |
 
@@ -111,8 +111,15 @@ Follow Waveshare's wiki for the ESP32-P4-WIFI6 to reflash the ESP-Hosted slave
 firmware onto the C6, and check the SDIO pin assignment under
 *Component config → ESP-Hosted* matches the board schematic.
 
+**Narrow field of view**
+The lens is 120°, but the sensor mode decides how much of it you see. Only
+1280×960 (2×2 binned) reads essentially the whole array. 800×640 crops to 81% of
+the width, and 1920×1080 — despite having the most pixels — is a centre crop at
+73% wide and 56% tall, the narrowest of the three. Use 1280×960, the default.
+
 **Low frame rate**
-Drop the resolution first (800×640 → 640×480), then JPEG quality. Wi-Fi
+Drop JPEG quality first. Dropping to 800×640 also works but costs field of
+view, so prefer quality. Wi-Fi
 throughput through the SDIO link, not the encoder, is usually the limit.
 Watch the `x.x fps, last frame N B` lines in the monitor to see which.
 
