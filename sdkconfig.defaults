@@ -17,6 +17,9 @@ CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+# The ESP32-P4 bootloader with esp_hosted/PSRAM support exceeds the 0x6000 that
+# the default 0x8000 table offset allows, so move the table out to 0xA000.
+CONFIG_PARTITION_TABLE_OFFSET=0xA000
 
 # ---- camera ----------------------------------------------------------------
 # OV5647 is the sensor on the Raspberry Pi camera module.

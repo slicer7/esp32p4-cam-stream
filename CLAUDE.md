@@ -26,8 +26,12 @@ push it into the ISP or the encoder instead.
 | Link to camera | MIPI-CSI, 2 lane, RAW8; SCCB on I2C port 0 |
 | Wi-Fi | ESP32-C6 over SDIO via ESP-Hosted; `esp_wifi_remote` forwards the normal `esp_wifi_*` API |
 
-**Not verified on real hardware yet.** Nothing in this repo has been run on the
-board. Three things are unconfirmed and are the first suspects for any failure:
+**Builds clean, but has never run on the board.** As of 2026-09-01 the project
+compiles without warnings against ESP-IDF v5.5.5 (app binary ~951 KB, 77% of the
+4 MB partition free) and all managed components resolve: `esp_video` 2.4.1,
+`esp_cam_sensor` 2.4.0, `esp_hosted` 3.0.6, `esp_wifi_remote` 1.6.4. No frame
+has ever been captured. Three things are unconfirmed and are the first suspects
+for any runtime failure:
 
 1. **SCCB pins.** Default GPIO7 (SDA) / GPIO8 (SCL) — that is Espressif's
    reference board. Waveshare's schematic may differ. Configurable in menuconfig.
@@ -37,14 +41,48 @@ board. Three things are unconfirmed and are the first suspects for any failure:
 
 ## Toolchain — read this before building
 
-**ESP-IDF v5.5 (stable).** The project targets `>=5.4`.
+**ESP-IDF v5.5.5.** The project targets `>=5.5` and is verified against 5.5.5.
 
-The desktop machine had **v6.1-beta1** installed at `C:\esp\v6.1-beta1\esp-idf`
-(tools in `C:\Espressif\tools`). That is a pre-release, and `esp_video` /
-`esp_hosted` have no release validated against it — dependency resolution is
-expected to fail. Install 5.5 alongside it via the EIM GUI and select that.
+The desktop machine has two IDF versions installed by EIM: `C:\esp\v5.5.5` and
+`C:\esp\v6.0.2`, tools shared in `C:\Espressif\tools`. **EIM has 6.0.2 selected**,
+so anything that follows EIM's own selection picks the wrong one. VS Code is
+pinned to 5.5.5 explicitly (see below). Do not assume the active version — check.
 
-Multiple IDF versions coexist fine; the VS Code extension switches between them.
+### Three environment traps, all of which cost real time already
+
+1. **`ESP_IDF_VERSION` must be exported.** `esp_wifi_remote`'s Kconfig does
+   `orsource "./Kconfig.idf_v$ESP_IDF_VERSION.in"`. That variable is set by IDF's
+   *activation* step, not by the CMake build. Build from a shell where it is
+   unset and the orsource silently resolves to a nonexistent file, leaving
+   `CONFIG_WIFI_RMT_*` undefined — the build then fails deep inside esp_hosted's
+   `eh_host_wifi.c` with errors that look like a dependency conflict but are not.
+   Do not "fix" `idf_component.yml` in response; fix the environment.
+
+2. **EIM's activation script needs PowerShell 7.** `C:\Espressif\tools\
+   Microsoft.v5.5.5.PowerShell_profile.ps1` does not parse under Windows
+   PowerShell 5.1 (parse error at the `Register-IdfCompletions` closing brace),
+   and only 5.1 is installed. Either install pwsh 7 or set the environment
+   manually — the script's `$env_var_pairs` block lists exactly what is needed.
+
+3. **Do not set `IDF_COMPONENT_LOCAL_STORAGE_URL`.** EIM's activation script
+   points it at a local offline mirror, which will not contain `esp_video`.
+   It is deliberately omitted from the VS Code config for that reason.
+
+### VS Code setup
+
+Extension 2.2.0 does **not** use `idf.espIdfPath` / `idf.toolsPath` /
+`idf.customExtraPaths` — those keys no longer exist. It reads `idf.currentSetup`
+(an IDF *path*) plus `idf.customExtraVars`, falling back to EIM's manifest at
+`C:\Espressif\tools\eim_idf.json`. With `idf.currentSetup` empty it hands
+`undefined` to a Node path call and every command dies with "The 'path' argument
+must be of type string." With `idf.customExtraVars` empty it silently defaults
+`IDF_PATH` to `%USERPROFILE%\esp\esp-idf`, which does not exist here.
+
+`.vscode/settings.json` is gitignored (absolute paths). Recreate it per machine
+with `idf.currentSetup`, and `idf.customExtraVars` carrying at least `IDF_PATH`,
+`IDF_TOOLS_PATH`, `IDF_PYTHON_ENV_PATH` and `ESP_IDF_VERSION`. The extension's
+"Use Existing Setup" wizard is supposed to write these but failed partway here,
+leaving only `idf.gitPathWin`.
 
 ### VS Code setup (this bit already went wrong once)
 
@@ -119,3 +157,17 @@ field names and the `/dev/video0` device naming are the likely breakage points
 on a version bump. `idf_component.yml` pins `"*"` deliberately — if the build
 breaks there, check the installed component's headers under
 `managed_components/` rather than guessing.
+
+Two IDF API details `main.c` depends on, both confirmed against 5.5.5:
+
+- `esp_cache_get_alignment()` is declared **only** in the private header
+  `esp_private/esp_cache_private.h`, not in `esp_cache.h`. If a version bump
+  moves or removes it, replace the call with a fixed 64-byte constant rather
+  than dropping the alignment check.
+- `httpd_err_code_t` has **no 503 entry**. The "another client is streaming"
+  path therefore sets the status line directly with `httpd_resp_set_status()`
+  instead of `httpd_resp_send_err()`.
+
+`CONFIG_PARTITION_TABLE_OFFSET` is moved to `0xA000` in `sdkconfig.defaults`.
+The P4 bootloader with PSRAM and esp_hosted support is 0x60c0 bytes, which does
+not fit the 0x6000 the default 0x8000 offset allows. Do not move it back.

@@ -32,6 +32,9 @@
 #include "esp_netif.h"
 #include "esp_wifi.h"
 #include "esp_cache.h"
+/* esp_cache_get_alignment() is only declared in this private IDF header. It is
+   used once, for a defensive check on V4L2 buffer alignment in capture_jpeg(). */
+#include "esp_private/esp_cache_private.h"
 #include "esp_heap_caps.h"
 #include "esp_http_server.h"
 #include "nvs_flash.h"
@@ -420,8 +423,10 @@ static esp_err_t jpg_handler(httpd_req_t *req)
 static esp_err_t stream_handler(httpd_req_t *req)
 {
     if (xSemaphoreTake(s_cam_lock, 0) != pdTRUE) {
-        httpd_resp_send_err(req, HTTPD_503_SERVICE_UNAVAILABLE,
-                            "another client is already streaming");
+        /* httpd_err_code_t has no 503 entry, so set the status line directly. */
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        httpd_resp_set_type(req, "text/plain");
+        httpd_resp_sendstr(req, "another client is already streaming");
         return ESP_FAIL;
     }
 
