@@ -227,9 +227,14 @@ static esp_err_t camera_open(cam_t *c)
     fmt.fmt.pix.height      = CONFIG_P4CAM_FRAME_HEIGHT;
     fmt.fmt.pix.pixelformat = CAP_PIXFMT;
     if (ioctl(c->fd, VIDIOC_S_FMT, &fmt) != 0) {
-        ESP_LOGW(TAG, "VIDIOC_S_FMT %dx%d rejected (errno %d), falling back to the "
-                      "sensor default size",
+        ESP_LOGE(TAG, "VIDIOC_S_FMT %dx%d REJECTED (errno %d)",
                  CONFIG_P4CAM_FRAME_WIDTH, CONFIG_P4CAM_FRAME_HEIGHT, errno);
+        ESP_LOGE(TAG, "  The sensor mode is almost certainly not compiled in. Picking a");
+        ESP_LOGE(TAG, "  resolution under \"P4 Camera Stream Configuration\" is NOT enough --");
+        ESP_LOGE(TAG, "  the mode must also be enabled under Component config -> Espressif");
+        ESP_LOGE(TAG, "  Camera Sensors -> OV5647. See the format list logged just above.");
+        ESP_LOGE(TAG, "  Falling back to the sensor default, which may be a CROPPED mode");
+        ESP_LOGE(TAG, "  with a narrower field of view than you asked for.");
         memset(&fmt, 0, sizeof(fmt));
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         if (ioctl(c->fd, VIDIOC_G_FMT, &fmt) != 0) {

@@ -192,6 +192,29 @@ and push over Wi-Fi.
 If someone asks for a wider view than this, the mode list is exhausted; the
 answer is a different lens, not a different setting.
 
+**Setting the resolution takes TWO configs, and this has already bitten once.**
+`CONFIG_P4CAM_FRAME_WIDTH`/`HEIGHT` only says what the app *asks* for. The mode
+must also be compiled into the sensor driver via
+`CONFIG_CAMERA_OV5647_MIPI_RAW10_1280X960_BINNING_45FPS` (Component config →
+Espressif Camera Sensors → OV5647). If it is not built, `VIDIOC_S_FMT` is
+rejected and the app falls back to the sensor default — which was 800x800, a
+1:1 crop, and looked like the FOV change simply had not worked. All five modes
+are now enabled in `sdkconfig.defaults` and the default index is 4 (1280x960),
+so even the fallback path keeps the full field of view. The rejection now logs
+at ERROR level naming this exact cause.
+
+## Do not delete the user's sdkconfig
+
+`sdkconfig` holds their Wi-Fi credentials and every menuconfig choice, and it is
+gitignored — deleting it silently throws away work they did by hand. Editing
+`sdkconfig.defaults` alone will NOT change an existing `sdkconfig`; defaults are
+only consumed when one is created from scratch.
+
+To apply a new default to a live tree, edit the matching lines in `sdkconfig`
+directly (respecting choice groups: exactly one `=y`, the others
+`# ... is not set`) and then build normally. Never `rm sdkconfig` to force
+defaults through.
+
 ## Known-fragile
 
 `esp_video`'s API has churned across releases. `esp_video_init_csi_config_t`

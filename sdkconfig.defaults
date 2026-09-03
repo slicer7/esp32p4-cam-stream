@@ -32,6 +32,21 @@ CONFIG_PARTITION_TABLE_OFFSET=0xA000
 # ---- camera ----------------------------------------------------------------
 # OV5647 is the sensor on the Raspberry Pi camera module.
 CONFIG_CAMERA_OV5647=y
+
+# Each sensor mode has to be COMPILED IN here before the app can request it.
+# Asking for a resolution in "P4 Camera Stream Configuration" is not enough: if
+# the mode is not built, VIDIOC_S_FMT is rejected and the app quietly falls back
+# to the sensor default. Enable all five so the boot-time enumeration is honest
+# and switching resolution needs no driver change.
+CONFIG_CAMERA_OV5647_MIPI_RAW8_800X640_50FPS=y
+CONFIG_CAMERA_OV5647_MIPI_RAW8_800X800_50FPS=y
+CONFIG_CAMERA_OV5647_MIPI_RAW8_800X1280_50FPS=y
+CONFIG_CAMERA_OV5647_MIPI_RAW10_1920X1080_30FPS=y
+CONFIG_CAMERA_OV5647_MIPI_RAW10_1280X960_BINNING_45FPS=y
+
+# 1280x960 binning is the full-field-of-view mode; make it the sensor default so
+# even the fallback path keeps the whole 120 degrees. (Index 4.)
+CONFIG_CAMERA_OV5647_MIPI_DEFAULT_FMT_RAW10_1280X960_BINNING_45FPS=y
 CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE=y
 CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE=y
 
