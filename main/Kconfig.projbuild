@@ -71,6 +71,61 @@ menu "P4 Camera Stream Configuration"
         range 1 100
         default 80
 
+    config P4CAM_ISP_BRIGHTNESS
+        int "ISP brightness (-128..127, 0 = sensor default)"
+        range -128 127
+        default 24
+        help
+            Applied to the ISP at boot via V4L2_CID_BRIGHTNESS on /dev/video20.
+            This is a post-ISP lift, not an exposure change: it brightens the
+            image without slowing the shutter, so it costs no frame rate but
+            will also lift noise in a dark scene. Raise it if the picture is
+            dim; set 0 to leave the ISP alone.
+
+    config P4CAM_ISP_CONTRAST
+        int "ISP contrast (0..255, 128 = neutral)"
+        range 0 255
+        default 128
+
+    config P4CAM_ISP_SATURATION
+        int "ISP saturation (0..255, 128 = neutral)"
+        range 0 255
+        default 128
+
+    config P4CAM_DETECT_ENABLE
+        bool "Run object detection (YOLO11n, 80 COCO classes)"
+        default y
+        help
+            Runs a YOLO11n model on captured frames using the P4's vector unit.
+            Adds about 2.9 MB of model to the app partition and one task; the
+            video path is never blocked by it, frames are simply skipped while
+            inference is busy.
+
+    config P4CAM_DETECT_INTERVAL_MS
+        int "Minimum milliseconds between detections"
+        default 400
+        depends on P4CAM_DETECT_ENABLE
+        help
+            Lower runs the model more often and costs more CPU and frame rate.
+            Inference itself takes far longer than a frame, so this throttles
+            how much of the CPU detection is allowed to consume.
+
+    config P4CAM_DETECT_SCORE_THR
+        int "Detection score threshold (percent)"
+        range 1 99
+        default 40
+        depends on P4CAM_DETECT_ENABLE
+
+    config P4CAM_DETECT_DRAW_BOXES
+        bool "Draw boxes into the video stream"
+        default y
+        depends on P4CAM_DETECT_ENABLE
+        help
+            Boxes are drawn into the frame before JPEG encoding, so they show up
+            in ffplay and OpenCV too. Labels are added by the web page from the
+            /detections endpoint; turn this off to get a clean image and rely on
+            /detections alone.
+
     choice P4CAM_PIXEL_FORMAT
         prompt "ISP output pixel format fed to the JPEG encoder"
         default P4CAM_FMT_RGB565

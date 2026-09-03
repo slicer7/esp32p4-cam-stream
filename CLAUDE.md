@@ -203,6 +203,59 @@ are now enabled in `sdkconfig.defaults` and the default index is 4 (1280x960),
 so even the fallback path keeps the full field of view. The rejection now logs
 at ERROR level naming this exact cause.
 
+## Object detection
+
+YOLO11n (320x320 input, 80 COCO classes) via ESP-DL, in `main/detector.cpp`
+behind the C API in `main/detector.h` so `main.c` stays C.
+
+Threading contract, and it matters: **the video path is never blocked by
+inference.** `detector_submit()` copies the frame and returns immediately; if
+the model is still running, or `P4CAM_DETECT_INTERVAL_MS` has not elapsed, the
+frame is dropped. One producer (the capture path), one consumer (the detector
+task, pinned to core 1 at priority 3, below HTTP). `s_busy` is what makes the
+lock-free handoff of `s_frame` safe — do not "simplify" it into a queue without
+thinking about the 2.4 MB per frame that would imply.
+
+Boxes are drawn into the frame before JPEG encoding, so ffplay and OpenCV
+clients see them too; labels are added by the web page from `/detections`,
+which avoids putting a font renderer on the device. Boxes lag the image by a
+frame or two — that is inherent, not a bug.
+
+**`espressif/esp-dl` is pinned to `~3.1.5` and must stay there.** `coco_detect`
+0.1.3 declares `^3.1.1`, which the solver satisfies with 3.3.x, but 3.2.0
+changed `AnchorPointDetectPostprocessor`'s constructor (added an
+`ImagePreprocessor*`) and made `DetectWrapper::load_model()` pure virtual.
+Anything >= 3.2.0 fails to compile *inside coco_detect itself* and leaves
+`COCODetect` abstract. Unpin only when coco_detect ships a build against the
+newer API. Related: esp-dl 3.1.x has no `set_score_thr()` and no
+`DL_IMAGE_PIX_TYPE_RGB565LE` (just `..._RGB565`), so the score threshold is
+applied by filtering results in `detector_task`.
+
+Only the 320x320 model is flashed. Each model variant costs ~2.9 MB, and the
+640x640 ones are several times slower for little gain at streaming rates. The
+app partition was grown from 4 MB to 8 MB to fit it — **the partition table
+changed, so a full `idf.py flash` is required, not an app-only flash.**
+
+Not yet verified on hardware: whether ESP-DL maps box coordinates back to the
+full 1280x960 frame (assumed) rather than to the 320x320 model input, and how
+the 4:3 -> 1:1 rescale affects accuracy.
+
+## Image is dark
+
+`P4CAM_ISP_BRIGHTNESS` (default 24) is applied at boot via
+`V4L2_CID_BRIGHTNESS` on `/dev/video20`, with contrast and saturation
+alongside. Ranges: brightness -128..127 (0 neutral), contrast and saturation
+0..255 (128 neutral).
+
+This is a **post-ISP lift, not an exposure change** — it costs no frame rate
+but lifts noise along with the signal. If the image is still dark, the real fix
+is the AE target in the sensor's IPA config
+(`managed_components/espressif__esp_cam_sensor/sensors/ov5647/cfg/ov5647_default.json`),
+which has no `agc` section and so uses library defaults; the generator in
+`espressif__esp_ipa/tools/config/isp/agc.py` shows the schema
+(`agc.luma_adjust.target`). That means a longer exposure, which does cost frame
+rate in low light.
+
 ## Do not delete the user's sdkconfig
 
 `sdkconfig` holds their Wi-Fi credentials and every menuconfig choice, and it is

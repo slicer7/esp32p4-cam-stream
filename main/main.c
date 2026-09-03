@@ -44,9 +44,14 @@
 #include "linux/videodev2.h"
 #include "esp_video_init.h"
 
+#if CONFIG_P4CAM_DETECT_ENABLE
+#include "detector.h"
+#endif
+
 static const char *TAG = "p4cam";
 
 #define VIDEO_DEVICE      "/dev/video0"   /* MIPI-CSI capture device */
+#define ISP_DEVICE        "/dev/video20"  /* ISP controls (brightness etc.) */
 #define VIDEO_BUF_COUNT   2
 
 #if CONFIG_P4CAM_FMT_RGB888
@@ -296,6 +301,91 @@ static esp_err_t camera_open(cam_t *c)
     return ESP_OK;
 }
 
+/* ------------------------------------------------------------ ISP tuning */
+
+static void isp_set_ctrl(int fd, uint32_t id, int32_t val, const char *what)
+{
+    struct v4l2_ext_control ctrl = { .id = id, .value = val };
+    struct v4l2_ext_controls ctrls = {
+        .ctrl_class = V4L2_CTRL_CLASS_USER,
+        .count      = 1,
+        .controls   = &ctrl,
+    };
+    if (ioctl(fd, VIDIOC_S_EXT_CTRLS, &ctrls) != 0) {
+        ESP_LOGW(TAG, "ISP %s = %d rejected (errno %d)", what, (int)val, errno);
+    } else {
+        ESP_LOGI(TAG, "ISP %s = %d", what, (int)val);
+    }
+}
+
+/* Post-ISP image tuning. Brightness here is a lift applied after the ISP, not a
+   longer exposure, so it costs no frame rate but does lift noise with it. */
+static void isp_apply_controls(void)
+{
+    int fd = open(ISP_DEVICE, O_RDWR);
+    if (fd < 0) {
+        ESP_LOGW(TAG, "no ISP device at %s (errno %d); skipping image tuning",
+                 ISP_DEVICE, errno);
+        return;
+    }
+    isp_set_ctrl(fd, V4L2_CID_BRIGHTNESS, CONFIG_P4CAM_ISP_BRIGHTNESS, "brightness");
+    isp_set_ctrl(fd, V4L2_CID_CONTRAST,   CONFIG_P4CAM_ISP_CONTRAST,   "contrast");
+    isp_set_ctrl(fd, V4L2_CID_SATURATION, CONFIG_P4CAM_ISP_SATURATION, "saturation");
+    close(fd);
+}
+
+/* ------------------------------------------------------- box overlay */
+
+#if CONFIG_P4CAM_DETECT_ENABLE && CONFIG_P4CAM_DETECT_DRAW_BOXES
+
+#if CONFIG_P4CAM_FMT_RGB888
+  #define BOX_R 0x00
+  #define BOX_G 0xFF
+  #define BOX_B 0x40
+#else
+  /* RGB565 little-endian bright green. */
+  #define BOX_RGB565 0x07E4
+#endif
+
+static inline void put_px(uint8_t *fb, uint32_t w, uint32_t h, int x, int y)
+{
+    if (x < 0 || y < 0 || x >= (int)w || y >= (int)h) {
+        return;
+    }
+#if CONFIG_P4CAM_FMT_RGB888
+    uint8_t *p = fb + ((size_t)y * w + x) * 3;
+    p[0] = BOX_R; p[1] = BOX_G; p[2] = BOX_B;
+#else
+    *(uint16_t *)(fb + ((size_t)y * w + x) * 2) = BOX_RGB565;
+#endif
+}
+
+static void draw_rect(uint8_t *fb, uint32_t w, uint32_t h,
+                      int x0, int y0, int x1, int y1)
+{
+    const int t = 2;   /* line thickness */
+    for (int k = 0; k < t; k++) {
+        for (int x = x0; x <= x1; x++) {
+            put_px(fb, w, h, x, y0 + k);
+            put_px(fb, w, h, x, y1 - k);
+        }
+        for (int y = y0; y <= y1; y++) {
+            put_px(fb, w, h, x0 + k, y);
+            put_px(fb, w, h, x1 - k, y);
+        }
+    }
+}
+
+static void draw_detections(uint8_t *fb, uint32_t w, uint32_t h)
+{
+    detection_t d[DETECTOR_MAX_RESULTS];
+    size_t n = detector_get(d, DETECTOR_MAX_RESULTS);
+    for (size_t i = 0; i < n; i++) {
+        draw_rect(fb, w, h, d[i].x0, d[i].y0, d[i].x1, d[i].y1);
+    }
+}
+#endif /* draw boxes */
+
 /* --------------------------------------------------------- JPEG encoding */
 
 static jpeg_encoder_handle_t s_jpeg;
@@ -359,6 +449,18 @@ static esp_err_t capture_jpeg(cam_t *c, uint8_t **out, uint32_t *out_len)
         src = s_align_scratch;
     }
 
+#if CONFIG_P4CAM_DETECT_ENABLE
+    /* Hand this frame to the model if it is idle. Copies and returns at once,
+       so the stream never waits on inference. */
+    detector_submit(src, src_len);
+#if CONFIG_P4CAM_DETECT_DRAW_BOXES
+    /* Boxes come from the most recent completed inference, which is a frame or
+       two old — they lag slightly on fast movement. Drawn before encoding so
+       ffplay and OpenCV clients see them too. */
+    draw_detections(src, c->width, c->height);
+#endif
+#endif
+
     jpeg_encode_cfg_t ecfg = {
         .src_type      = JPEG_SRC_FMT,
         .sub_sample    = JPEG_DOWN_SAMPLING_YUV420,
@@ -392,10 +494,67 @@ static SemaphoreHandle_t s_cam_lock;
 static const char INDEX_HTML[] =
     "<!doctype html><html><head><meta charset=\"utf-8\">"
     "<title>ESP32-P4 camera</title>"
-    "<style>body{margin:0;background:#111;color:#eee;font:14px system-ui;text-align:center}"
-    "img{max-width:100%;height:auto;display:block;margin:0 auto}</style></head>"
-    "<body><img src=\"/stream\" alt=\"live stream\">"
-    "<p>/stream = MJPEG &middot; /jpg = single frame</p></body></html>";
+    "<style>"
+    "body{margin:0;background:#111;color:#eee;font:14px system-ui;text-align:center}"
+    "#wrap{position:relative;display:inline-block;line-height:0}"
+    "#v{max-width:100%;height:auto;display:block}"
+    ".tag{position:absolute;transform:translateY(-100%);background:#07e4;"
+    "color:#000;font:600 12px/1.4 system-ui;padding:0 4px;white-space:nowrap;"
+    "border-radius:2px 2px 0 0}"
+    "#foot{padding:8px;line-height:1.5}"
+    "</style></head><body>"
+    "<div id=\"wrap\"><img id=\"v\" src=\"/stream\" alt=\"live stream\"></div>"
+    "<div id=\"foot\">/stream = MJPEG &middot; /jpg = single frame &middot; "
+    "/detections = JSON<br><span id=\"st\">&nbsp;</span></div>"
+    "<script>"
+    "const v=document.getElementById('v'),w=document.getElementById('wrap'),"
+    "st=document.getElementById('st');"
+    "async function poll(){"
+    " try{"
+    "  const r=await fetch('/detections',{cache:'no-store'});"
+    "  const j=await r.json();"
+    "  for(const e of w.querySelectorAll('.tag'))e.remove();"
+    "  if(!j.width||!v.clientWidth){return;}"
+    "  const s=v.clientWidth/j.width;"
+    "  for(const d of j.objects){"
+    "   const t=document.createElement('div');"
+    "   t.className='tag';t.style.left=(d.x0*s)+'px';t.style.top=(d.y0*s)+'px';"
+    "   t.textContent=d.label+' '+Math.round(d.score*100)+'%';"
+    "   w.appendChild(t);"
+    "  }"
+    "  st.textContent=j.objects.length+' object(s), inference '+j.ms.toFixed(0)+' ms';"
+    " }catch(e){}"
+    "}"
+    "setInterval(poll,400);poll();"
+    "</script></body></html>";
+
+static esp_err_t detections_handler(httpd_req_t *req)
+{
+    char json[1024];
+    int n = snprintf(json, sizeof(json), "{\"width\":%" PRIu32 ",\"height\":%" PRIu32,
+                     s_cam.width, s_cam.height);
+
+#if CONFIG_P4CAM_DETECT_ENABLE
+    detection_t d[DETECTOR_MAX_RESULTS];
+    size_t count = detector_get(d, DETECTOR_MAX_RESULTS);
+    n += snprintf(json + n, sizeof(json) - n, ",\"ms\":%.1f,\"objects\":[",
+                  detector_last_ms());
+    for (size_t i = 0; i < count && n < (int)sizeof(json) - 128; i++) {
+        n += snprintf(json + n, sizeof(json) - n,
+                      "%s{\"label\":\"%s\",\"score\":%.3f,"
+                      "\"x0\":%d,\"y0\":%d,\"x1\":%d,\"y1\":%d}",
+                      i ? "," : "", d[i].label, d[i].score,
+                      d[i].x0, d[i].y0, d[i].x1, d[i].y1);
+    }
+    n += snprintf(json + n, sizeof(json) - n, "]}");
+#else
+    n += snprintf(json + n, sizeof(json) - n, ",\"ms\":0,\"objects\":[]}");
+#endif
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    return httpd_resp_send(req, json, n);
+}
 
 static esp_err_t index_handler(httpd_req_t *req)
 {
@@ -493,9 +652,10 @@ static esp_err_t http_start(void)
     ESP_RETURN_ON_ERROR(httpd_start(&server, &cfg), TAG, "httpd_start");
 
     httpd_uri_t uris[] = {
-        { .uri = "/",       .method = HTTP_GET, .handler = index_handler  },
-        { .uri = "/stream", .method = HTTP_GET, .handler = stream_handler },
-        { .uri = "/jpg",    .method = HTTP_GET, .handler = jpg_handler    },
+        { .uri = "/",           .method = HTTP_GET, .handler = index_handler      },
+        { .uri = "/stream",     .method = HTTP_GET, .handler = stream_handler     },
+        { .uri = "/jpg",        .method = HTTP_GET, .handler = jpg_handler        },
+        { .uri = "/detections", .method = HTTP_GET, .handler = detections_handler },
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &uris[i]), TAG, "uri");
@@ -518,7 +678,15 @@ void app_main(void)
 
     ESP_ERROR_CHECK(camera_hw_init());
     ESP_ERROR_CHECK(camera_open(&s_cam));
+    isp_apply_controls();
     ESP_ERROR_CHECK(jpeg_init(&s_cam));
+
+#if CONFIG_P4CAM_DETECT_ENABLE
+    /* Not fatal: a camera that streams without detection beats no camera. */
+    if (detector_start(s_cam.width, s_cam.height) != ESP_OK) {
+        ESP_LOGE(TAG, "object detection unavailable, streaming without it");
+    }
+#endif
 
     /* Prove the imaging path works before there is any network to blame. */
     uint8_t *jpg;

@@ -50,6 +50,18 @@ CONFIG_CAMERA_OV5647_MIPI_DEFAULT_FMT_RAW10_1280X960_BINNING_45FPS=y
 CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE=y
 CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE=y
 
+# ---- object detection (ESP-DL / YOLO11n) -----------------------------------
+# Flash ONLY the 320x320 model. The 640x640 variants are several times slower
+# per frame for little gain at streaming rates, and each one flashed costs
+# another ~2.9 MB of app partition.
+CONFIG_FLASH_COCO_DETECT_YOLO11N_S8_V3=n
+CONFIG_FLASH_COCO_DETECT_YOLO11N_320_S8_V3=y
+CONFIG_COCO_DETECT_YOLO11N_320_S8_V3=y
+CONFIG_COCO_DETECT_MODEL_IN_FLASH_RODATA=y
+
+# C++ RTTI is needed by ESP-DL's model loading.
+CONFIG_COMPILER_CXX_RTTI=y
+
 # ---- tasks / stacks --------------------------------------------------------
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096

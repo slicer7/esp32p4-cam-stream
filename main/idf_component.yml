@@ -15,3 +15,17 @@ dependencies:
   # leaving CONFIG_WIFI_RMT_* undefined and the build failing inside esp_hosted's
   # eh_host_wifi.c. The fix is the environment, not this file.
   espressif/esp_wifi_remote: "*"
+
+  # On-device object detection: YOLO11n trained on COCO (80 classes), running on
+  # the P4's vector unit via ESP-DL. coco_detect pulls esp-dl itself.
+  espressif/coco_detect: "^0.1"
+
+  # PIN esp-dl to 3.1.x. coco_detect 0.1.3 declares "^3.1.1", which the solver
+  # happily satisfies with 3.3.x -- but 3.2.0 changed
+  # AnchorPointDetectPostprocessor's constructor (it gained an
+  # ImagePreprocessor* second argument) and made DetectWrapper::load_model()
+  # pure virtual. coco_detect still uses the old 5-argument form, so anything
+  # >= 3.2.0 fails to compile inside coco_detect itself, and COCODetect comes
+  # out abstract. Revisit only when coco_detect publishes a version built
+  # against the newer API.
+  espressif/esp-dl: "~3.1.5"

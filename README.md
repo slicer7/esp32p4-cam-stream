@@ -85,6 +85,32 @@ I (5231) p4cam:  Stream ready:  http://192.168.1.57/
           break
   ```
 - **Single frame** — `http://<ip>/jpg`
+- **Detections** — `http://<ip>/detections` returns JSON:
+  ```json
+  {"width":1280,"height":960,"ms":214.0,
+   "objects":[{"label":"person","score":0.83,"x0":410,"y0":120,"x1":900,"y1":940}]}
+  ```
+
+## Object detection
+
+YOLO11n (80 COCO classes) runs on-device via ESP-DL. Boxes are drawn into the
+video itself, so they show up in ffplay and OpenCV too; the web page adds the
+text labels from `/detections`.
+
+Detection never slows the video down. Frames are handed to the model only when
+it is idle and at most every `P4CAM_DETECT_INTERVAL_MS` (default 400 ms) —
+otherwise they are skipped. Inference takes far longer than a frame, so boxes
+lag the picture slightly. Tune in menuconfig:
+
+| Option | Effect |
+|---|---|
+| Minimum ms between detections | lower = more responsive boxes, less CPU for video |
+| Score threshold | default 40% |
+| Draw boxes into the stream | off gives a clean image; `/detections` still works |
+| Run object detection | off removes the model and ~2.9 MB from the build |
+
+The app partition is 8 MB to fit the model, so **flash the whole thing**
+(`idf.py flash`), not just the app — the partition table changed.
 
 Only one `/stream` client at a time; a second gets 503. `/jpg` waits its turn.
 
@@ -110,6 +136,12 @@ The C6 co-processor firmware is missing or mismatched with your IDF version.
 Follow Waveshare's wiki for the ESP32-P4-WIFI6 to reflash the ESP-Hosted slave
 firmware onto the C6, and check the SDIO pin assignment under
 *Component config → ESP-Hosted* matches the board schematic.
+
+**Image too dark**
+Raise "ISP brightness" in menuconfig (default 24, range -128..127). It is a
+post-ISP lift, so it costs no frame rate but lifts noise too. A genuinely
+darker scene needs a longer exposure, which means editing the AE target in the
+sensor's IPA JSON and does cost frame rate.
 
 **Narrow field of view**
 The lens is 120°, but the sensor mode decides how much of it you see. Only
