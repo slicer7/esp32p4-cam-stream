@@ -38,7 +38,7 @@ grow into a history. Append one line per session to the log at the bottom.
 | Machine | Notes |
 |---|---|
 | Desktop | Windows 11. ESP-IDF v5.5.5 at `C:\esp\v5.5.5`, tools `C:\Espressif\tools`. Board on COM3. Fully set up and flashing. |
-| Laptop | Not set up yet. Needs ESP-IDF v5.5.5, `.vscode/settings.json` from `docs/vscode-settings.example.json`, and Wi-Fi credentials re-entered in menuconfig. |
+| Laptop | Windows 11, Windows PowerShell 5.1 only (no pwsh). Clone at `C:\Users\lukes\Claude\esp32p4-cam-stream`. ESP-IDF v5.5.5 at `C:\esp\v5.5.5\esp-idf` (EIM also has v6.0.1 selected, and `C:\esp\v6.1` exists — ignored). Tools `C:\Espressif\tools`, python venv `C:\Espressif\tools\python\v5.5.5\venv`, same tool version folders as the desktop plus `qemu-riscv32`/`qemu-xtensa` `esp_develop_9.2.2_20260417`. VS Code extension 2.2.0; `.vscode/settings.json` written from the example, plus `IDF_COMPONENT_CACHE_PATH=C:\Espressif\cmc` (long-path trap, see CLAUDE.md). **Builds** (resolved `esp_hosted` 3.0.7, not 3.0.6). Not flashed on this machine. Wi-Fi credentials still placeholders — set them in menuconfig. |
 
 ## Session log
 
@@ -49,3 +49,4 @@ Newest at the bottom. One line each: date, machine, what changed.
 - 2026-09-02 desktop — Stream confirmed working on hardware. Full FOV (1280x960 binned), chip rev v1.3 config.
 - 2026-09-03 desktop — Sensor mode actually compiled in; object detection and ISP brightness added; stale packed-model panic diagnosed.
 - 2026-09-14 desktop — Added STATUS.md and the cross-machine sync protocol.
+- 2026-09-14 laptop — First setup: cloned, IDF 5.5.5 env + `.vscode/settings.json`, `set-target esp32p4` + clean build (builds; not flashed). Hit and documented the Windows 260-char path trap in the component cache.

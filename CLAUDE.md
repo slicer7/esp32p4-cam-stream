@@ -93,7 +93,7 @@ The desktop machine has two IDF versions installed by EIM: `C:\esp\v5.5.5` and
 so anything that follows EIM's own selection picks the wrong one. VS Code is
 pinned to 5.5.5 explicitly (see below). Do not assume the active version — check.
 
-### Three environment traps, all of which cost real time already
+### Environment traps, all of which cost real time already
 
 1. **`ESP_IDF_VERSION` must be exported.** `esp_wifi_remote`'s Kconfig does
    `orsource "./Kconfig.idf_v$ESP_IDF_VERSION.in"`. That variable is set by IDF's
@@ -112,6 +112,25 @@ pinned to 5.5.5 explicitly (see below). Do not assume the active version — che
 3. **Do not set `IDF_COMPONENT_LOCAL_STORAGE_URL`.** EIM's activation script
    points it at a local offline mirror, which will not contain `esp_video`.
    It is deliberately omitted from the VS Code config for that reason.
+
+4. **Windows 260-character path limit in the component cache.** With
+   `LongPathsEnabled=0` (the Windows default; it was 0 on the laptop), the
+   component manager fails while unpacking `esp_hosted` 3.0.x into
+   `%LOCALAPPDATA%\Espressif\ComponentManager\Cache\...`: its `examples/power_save/
+   host+cp/network_split__host_deep_sleep_cp_light_sleep/...` files reach 267
+   chars. The symptom is a Python `FileNotFoundError` from `zipfile` during
+   `set-target`/cmake — it looks like a missing file, not a path-length problem.
+   Fix without touching system settings: add `"IDF_COMPONENT_CACHE_PATH":
+   "C:\\Espressif\\cmc"` to `idf.customExtraVars` (brings that path to ~228).
+   Enabling long paths in Windows also works, but is a system change. Keep the
+   clone path short too — the same files land under `managed_components/`.
+
+5. **A failed first configure leaves a `build/` that `fullclean` refuses to
+   remove.** If cmake dies before writing `CMakeCache.txt`, every later
+   `idf.py set-target` stops with "doesn't seem to be a CMake build directory.
+   Refusing to automatically delete files". Check that `build/` has no
+   `CMakeCache.txt` and only contains output from the failed run, then delete
+   `build/` (never `sdkconfig`) and retry.
 
 ### VS Code setup
 
