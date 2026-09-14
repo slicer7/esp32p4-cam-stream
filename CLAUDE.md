@@ -2,14 +2,53 @@
 
 Context for Claude Code working on this repo. Read this before touching anything.
 
+## Working across machines — do this every session
+
+This repo is worked on from two computers (a desktop and a laptop), each with its
+own Claude. GitHub is the only thing they share, so the repo has to carry all the
+context. Two files do that:
+
+- **CLAUDE.md** (this file) — stable reference: how things work and why. Changes
+  rarely.
+- **STATUS.md** — the moving part: current state, next steps, open questions, and a
+  one-line-per-session log. Changes every session.
+
+**At the start of a session:**
+
+1. `git pull` before reading or editing anything. The other machine may have
+   pushed since.
+2. Read STATUS.md, then this file.
+3. If the pull brought in commits, skim them (`git log --oneline -10`) so you know
+   what the other machine did.
+
+**At the end of a session**, or whenever meaningful work lands:
+
+1. Update STATUS.md — rewrite "Current state" and "Next up" so they are true *now*,
+   and append one log line: `- YYYY-MM-DD <desktop|laptop> — what changed`.
+2. If you learned something durable (a trap, a reason, a constraint), put it in
+   this file, not STATUS.md.
+3. Commit and **push**. Unpushed work is invisible to the other machine.
+
+Be honest in STATUS.md about what was *verified on hardware* versus only *built*.
+That distinction has mattered repeatedly here, and only one machine at a time has
+the board plugged in.
+
+Machine-specific things never go in git: `sdkconfig` (Wi-Fi credentials,
+menuconfig choices), `.vscode/` (absolute toolchain paths), `build/`. Each machine
+keeps its own. Absolute paths quoted in this file are from the **desktop**.
+
+If both machines edited STATUS.md and the pull conflicts, merge by hand: keep the
+truer "Current state", and keep *both* sets of log lines in date order.
+
 ## What this is
 
 Firmware for an **ESP32-P4** that captures from an **OV5647** camera over MIPI-CSI
 and serves it to a PC as an MJPEG stream over Wi-Fi.
 
 ```
-OV5647 ──MIPI-CSI 2-lane RAW8──▶ P4 ISP ──RGB565──▶ P4 hardware JPEG encoder
+OV5647 ──MIPI-CSI 2-lane RAW10 1280x960──▶ P4 ISP ──RGB565──▶ P4 hardware JPEG encoder
        ──▶ esp_http_server (multipart/x-mixed-replace) ──▶ browser / ffplay / OpenCV
+                        └─▶ YOLO11n detector task (ESP-DL) ──▶ /detections
 ```
 
 Design rule: **keep the CPU out of the pixel path.** The ISP does debayering and

@@ -1,0 +1,10 @@
+# Normalise line endings in the repo so the two machines don't produce
+# whole-file diffs (and merge conflicts) just from CRLF vs LF.
+* text=auto eol=lf
+
+# Model and image binaries must never be touched.
+*.espdl binary
+*.onnx  binary
+*.bin   binary
+*.jpg   binary
+*.png   binary
